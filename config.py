@@ -5,8 +5,8 @@ SECRET_KEY = 'chave_super_secreta'
 DEBUG = True
 
 DB_HOST = 'localhost'
-DB_NAME = r'C:\Users\Usuario\Desktop\doar\apiDoar2-main\BANCO_DOAR+.FDB'
+DB_NAME = r'C:\Users\Aluno\Desktop\PROJETOS - CAIQUE\apiiiii-main\BANCO_DOAR+.FDB'
 DB_USER = 'sysdba'
-DB_PASSWORD = 'SYSDBA'
+DB_PASSWORD = 'sysdba'
 
 UPLOAD_FOLDER = os.path.abspath(os.path.dirname(__file__))

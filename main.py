@@ -14,8 +14,7 @@ CORS(app,
      )
 
 
-# ✅ FIX: Intercepta QUALQUER requisição OPTIONS antes de chegar nas rotas
-# Isso resolve o CORS para /login e qualquer rota dos arquivos importados (usuario.py, ongs.py)
+
 @app.before_request
 def handle_options():
     if request.method == 'OPTIONS':

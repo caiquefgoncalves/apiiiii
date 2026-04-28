@@ -26,7 +26,7 @@ def listar_ongs_publicas():
     cur = con.cursor()
     try:
         cur.execute("""
-            SELECT ID_USUARIOS, NOME, DESCRICAO_BREVE, CATEGORIA
+            SELECT ID_USUARIOS, NOME, DESCRICAO_BREVE, CATEGORIA, DATA_CADASTRO
             FROM USUARIOS 
             WHERE TIPO = 2 AND APROVACAO = 1 AND ATIVO = 1
             ORDER BY NOME
@@ -35,11 +35,13 @@ def listar_ongs_publicas():
         lista = []
         if ongs:
             for o in ongs:
+                data_str = o[4].strftime('%Y-%m-%d %H:%M:%S') if o[4] else ''
                 lista.append({
                     'id': o[0],
                     'nome': o[1],
                     'descricao_breve': str(o[2]) if o[2] else '',
                     'categoria': str(o[3]) if o[3] else '',
+                    'data_cadastro': data_str,
                     'foto': f'{o[0]}.jpeg'
                 })
         return jsonify({'ongs': lista}), 200
@@ -51,33 +53,40 @@ def listar_ongs_publicas():
         con.close()
 
 
-
-
 @app.route('/ver_ong_publica/<int:id_ong>', methods=['GET'])
 def ver_ong_publica(id_ong):
     con = conexao()
     cur = con.cursor()
+
+
     try:
-        cur.execute("""SELECT ID_USUARIOS, NOME, DESCRICAO_BREVE, DESCRICAO_LONGA, 
-                              CPF_CNPJ, CATEGORIA, LOCALIZACAO, COD_BANCO, NUM_AGENCIA
-                       FROM USUARIOS WHERE ID_USUARIOS = ? AND TIPO = 2 AND APROVACAO = 1""", (id_ong,))
+        cur.execute("""SELECT ID_USUARIOS, NOME, DESCRICAO_BREVE, DESCRICAO_LONGA,
+        CPF_CNPJ, CATEGORIA, LOCALIZACAO, COD_BANCO, NUM_AGENCIA
+        FROM USUARIOS WHERE ID_USUARIOS = ? AND TIPO = 2 AND APROVACAO = 1""", (id_ong,))
+
         ong = cur.fetchone()
+
         if not ong:
+
             return jsonify({"error": "ONG não encontrada"}), 404
 
+        cnpj = ong[4]
+        cnpj_formatado = f"{cnpj[:2]}.{cnpj[2:5]}.{cnpj[5:8]}/{cnpj[8:12]}-{cnpj[12:]}"
+
+
         cur.execute("""SELECT ID_PROJETOS, TITULO, DESCRICAO, TIPO_AJUDA
-                       FROM PROJETOS WHERE ID_USUARIOS = ? AND STATUS = 'Ativo'""", (id_ong,))
+        FROM PROJETOS WHERE ID_USUARIOS = ? AND STATUS = 'Ativo'""", (id_ong,))
         projetos = cur.fetchall()
 
         return jsonify({
             'ong': {
-                'id': ong[0], 'nome': ong[1], 'descricao_breve': ong[2],
-                'descricao_longa': ong[3], 'cpf_cnpj': ong[4], 'categoria': ong[5],
-                'localizacao': ong[6], 'cod_banco': ong[7], 'num_agencia': ong[8],
-                'foto': f'{ong[0]}.jpeg'
+            'id': ong[0], 'nome': ong[1], 'descricao_breve': ong[2],
+            'descricao_longa': ong[3], 'cpf_cnpj': cnpj_formatado, 'categoria': ong[5],
+            'localizacao': ong[6], 'cod_banco': ong[7], 'num_agencia': ong[8],
+            'foto': f'{ong[0]}.jpeg'
             },
             'projetos': [{
-                'id': p[0], 'titulo': p[1], 'descricao': p[2], 'tipo_ajuda': p[3]
+            'id': p[0], 'titulo': p[1], 'descricao': p[2], 'tipo_ajuda': p[3]
             } for p in projetos] if projetos else []
         }), 200
     except Exception as e:
@@ -304,19 +313,36 @@ def deletar_ong(id_usuarios):
     con = conexao()
     cur = con.cursor()
     try:
-        cur.execute("SELECT ID_USUARIOS, NOME, ATIVO, APROVACAO FROM USUARIOS WHERE ID_USUARIOS = ? AND TIPO = 2", (id_usuarios,))
+        cur.execute("SELECT ID_USUARIOS, NOME, ATIVO, APROVACAO FROM USUARIOS WHERE ID_USUARIOS = ? AND TIPO = 2",
+                    (id_usuarios,))
         ong = cur.fetchone()
         if not ong: return jsonify({'error': 'ONG não encontrada'}), 404
         if ong[2] == 1 and ong[3] != 2:
             return jsonify({'error': 'Apenas ONGs bloqueadas ou reprovadas podem ser excluídas'}), 403
 
+        # 1. Buscar projetos da ONG
+        cur.execute("SELECT ID_PROJETOS FROM PROJETOS WHERE ID_USUARIOS = ?", (id_usuarios,))
+        projetos = cur.fetchall()
+
+        # 2. Excluir atualizações de cada projeto
+        for projeto in projetos:
+            cur.execute("DELETE FROM ATUALIZACOES WHERE ID_PROJETOS = ?", (projeto[0],))
+
+        # 3. Excluir projetos da ONG
+        cur.execute("DELETE FROM PROJETOS WHERE ID_USUARIOS = ?", (id_usuarios,))
+
+        # 4. Excluir histórico e recuperação
         cur.execute("DELETE FROM HISTORICO_SENHA WHERE ID_USUARIOS = ?", (id_usuarios,))
         cur.execute("DELETE FROM RECUPERACAO_SENHA WHERE ID_USUARIOS = ?", (id_usuarios,))
+
+        # 5. Excluir a ONG
         cur.execute("DELETE FROM USUARIOS WHERE ID_USUARIOS = ?", (id_usuarios,))
+
         con.commit()
-        return jsonify({'message': f'ONG {ong[1]} excluída!'}), 200
+        return jsonify({'message': f'ONG {ong[1]} excluída com sucesso!'}), 200
     except Exception as e:
         con.rollback()
+        print(f"ERRO deletar_ong: {e}")
         return jsonify({'error': f'Erro: {str(e)}'}), 500
     finally:
         cur.close()

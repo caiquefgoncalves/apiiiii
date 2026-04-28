@@ -759,3 +759,39 @@ def verificar_codigo():
     finally:
         cursor.close()
         con.close()
+
+
+# Buscar dados do próprio usuário logado
+@app.route('/meus_dados', methods=['GET'])
+def meus_dados():
+    token_data = decodificar_token()
+    if token_data == False:
+        return jsonify({'error': 'Token necessário'}), 401
+
+    id_usuarios = token_data['id_usuarios']
+
+    con = conexao()
+    cur = con.cursor()
+
+    try:
+        cur.execute("""SELECT ID_USUARIOS, NOME, EMAIL, CPF_CNPJ, TELEFONE
+                       FROM USUARIOS WHERE ID_USUARIOS = ?""", (id_usuarios,))
+        usuario = cur.fetchone()
+
+        if not usuario:
+            return jsonify({'error': 'Usuário não encontrado'}), 404
+
+        return jsonify({
+            'usuario': {
+                'id': usuario[0],
+                'nome': usuario[1],
+                'email': usuario[2],
+                'cpf_cnpj': usuario[3],
+                'telefone': usuario[4]
+            }
+        }), 200
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+    finally:
+        cur.close()
+        con.close()

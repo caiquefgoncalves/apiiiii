@@ -12,30 +12,47 @@ from datetime import datetime
 # ============================================
 @app.route('/feed_atualizacoes', methods=['GET'])
 def feed_atualizacoes():
+    """Feed público de atualizações com filtro de ordem"""
+    filtro = request.args.get('filtro', 'recentes')
+
     con = conexao()
     cur = con.cursor()
+
     try:
-        cur.execute("""
+        # Define a ordem baseado no filtro
+        if filtro == 'antigos':
+            ordem = 'ASC'
+        else:
+            ordem = 'DESC'  # recentes (padrão)
+
+        cur.execute(f"""
             SELECT a.ID_ATUALIZACOES, a.ID_PROJETOS, a.TITULO, a.TEXTO, a.DATA_CRIACAO,
                    p.ID_USUARIOS, p.TITULO, u.NOME
             FROM ATUALIZACOES a
             LEFT JOIN PROJETOS p ON a.ID_PROJETOS = p.ID_PROJETOS
             LEFT JOIN USUARIOS u ON p.ID_USUARIOS = u.ID_USUARIOS
-            ORDER BY a.DATA_CRIACAO DESC
+            ORDER BY a.DATA_CRIACAO {ordem}
         """)
 
         dados = cur.fetchall()
-        print(f"DEBUG - Total encontrado: {len(dados) if dados else 0}")
+        print(f"DEBUG - Feed total: {len(dados) if dados else 0} | Ordem: {ordem}")
 
         lista = []
         if dados:
             for a in dados:
+                data_str = ''
+                if a[4]:
+                    try:
+                        data_str = a[4].strftime('%d/%m/%Y %H:%M')
+                    except:
+                        data_str = str(a[4])
+
                 lista.append({
                     'id': a[0],
                     'projeto_id': a[1],
                     'titulo': str(a[2]) if a[2] else '',
                     'texto': str(a[3]) if a[3] else '',
-                    'data': str(a[4]) if a[4] else '',
+                    'data': data_str,
                     'ong_id': a[5] if a[5] else 0,
                     'projeto_titulo': str(a[6]) if a[6] else '',
                     'ong_nome': str(a[7]) if a[7] else 'ONG',
@@ -43,9 +60,9 @@ def feed_atualizacoes():
                     'foto': f'{a[0]}.jpeg'
                 })
 
-        return jsonify({'atualizacoes': lista, 'debug_total': len(lista)}), 200
+        return jsonify({'atualizacoes': lista}), 200
     except Exception as e:
-        print(f"ERRO: {e}")
+        print(f"ERRO feed_atualizacoes: {e}")
         return jsonify({'error': str(e)}), 500
     finally:
         cur.close()
